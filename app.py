@@ -1,12 +1,14 @@
 
+from pathlib import Path
+import html
+import sys
+
 import joblib
 import pandas as pd
 import streamlit as st
 
-from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-
 MODEL_PATH = BASE_DIR / "best_employee_model.pkl"
 PREPROCESSOR_PATH = BASE_DIR / "employee_preprocessor.pkl"
 DATA_PATH = (
@@ -15,164 +17,174 @@ DATA_PATH = (
 )
 
 st.set_page_config(
-    page_title="People Analytics | Performance Predictor",
+    page_title="Employee Performance Predictor",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+# Professional styling with readable contrast and visible focus.
 st.markdown(
     """
     <style>
-    @import url(
-        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
-    );
-
     .stApp {
-        background-color: #f4f7fb;
-        font-family: 'Inter', sans-serif;
-    }
-
-    [data-testid="stHeader"] {
-        background: rgba(244, 247, 251, 0.9);
+        background: #f5f7fb;
+        color: #172033;
     }
 
     [data-testid="stSidebar"] {
-        background: #101c35;
+        background: #14233d;
     }
 
     [data-testid="stSidebar"] * {
-        color: #edf3ff;
-    }
-
-    .brand {
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 2px;
-        color: #20b8a6;
-        text-transform: uppercase;
+        color: #f5f8ff;
     }
 
     .hero {
-        background: linear-gradient(120deg, #142440, #203f65);
-        padding: 34px 36px;
-        border-radius: 20px;
-        margin-bottom: 24px;
+        background: #172f50;
         color: white;
-        border: 1px solid #304b6e;
+        border-radius: 16px;
+        padding: 28px;
+        margin: 4px 0 22px;
+        border-left: 6px solid #16a6a1;
+    }
+
+    .hero-eyebrow {
+        color: #a9f0e7;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
     }
 
     .hero h1 {
         color: white;
-        font-size: 34px;
-        font-weight: 800;
-        margin: 8px 0;
+        font-size: clamp(1.8rem, 3vw, 2.5rem);
+        line-height: 1.2;
+        margin: 10px 0;
     }
 
     .hero p {
-        color: #d0deef;
-        font-size: 15px;
+        color: #edf4ff;
+        font-size: 1rem;
+        line-height: 1.6;
         margin-bottom: 0;
     }
 
-    .section-title {
-        font-size: 21px;
+    .section-heading {
+        color: #172f50;
+        font-size: 1.35rem;
         font-weight: 750;
-        color: #172b49;
         margin: 8px 0 4px;
     }
 
-    .section-subtitle {
-        color: #64748b;
-        font-size: 13px;
-        margin-bottom: 16px;
+    .muted {
+        color: #43536b;
+        line-height: 1.55;
     }
 
-    .panel {
+    .metric-card {
         background: white;
-        border: 1px solid #e0e7f0;
-        border-radius: 16px;
-        padding: 22px;
-        margin-bottom: 16px;
+        border: 1px solid #d8e0eb;
+        border-radius: 12px;
+        padding: 18px;
+        min-height: 105px;
     }
 
     .metric-label {
-        color: #64748b;
-        font-size: 12px;
-        font-weight: 600;
+        color: #43536b;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
-        letter-spacing: 0.7px;
     }
 
     .metric-value {
-        color: #172b49;
-        font-size: 25px;
+        color: #172f50;
+        font-size: 1.35rem;
         font-weight: 800;
-        margin-top: 7px;
+        margin-top: 8px;
+        overflow-wrap: anywhere;
     }
 
     .result-card {
         background: white;
-        border: 1px solid #dce6f1;
-        border-radius: 18px;
-        padding: 28px;
-        margin-top: 14px;
+        border: 1px solid #cbd9e8;
+        border-radius: 14px;
+        padding: 22px;
     }
 
     .result-label {
-        color: #64748b;
-        font-size: 13px;
-        font-weight: 600;
+        color: #43536b;
+        font-size: 0.9rem;
+        font-weight: 700;
     }
 
     .result-score {
-        color: #087f8c;
-        font-size: 54px;
+        color: #075e66;
+        font-size: clamp(2.3rem, 5vw, 3.4rem);
         font-weight: 800;
-        line-height: 1.3;
-    }
-
-    div.stButton > button,
-    div.stFormSubmitButton > button {
-        background: #087f8c;
-        color: white;
-        border: none;
-        border-radius: 10px;
-        font-weight: 700;
-        min-height: 46px;
-        transition: 0.2s ease;
-    }
-
-    div.stButton > button:hover,
-    div.stFormSubmitButton > button:hover {
-        background: #066874;
-        color: white;
-        border: none;
-    }
-
-    div[data-baseweb="input"] > div,
-    div[data-baseweb="select"] > div {
-        border-radius: 9px;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
     }
 
     div[data-testid="stForm"] {
         background: white;
+        border: 1px solid #d8e0eb;
+        border-radius: 14px;
         padding: 22px;
-        border: 1px solid #e0e7f0;
-        border-radius: 16px;
+    }
+
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="select"] > div {
+        border-radius: 8px;
+    }
+
+    div.stFormSubmitButton > button {
+        background: #086f78;
+        color: white;
+        border: 2px solid #086f78;
+        border-radius: 9px;
+        min-height: 48px;
+        font-weight: 700;
+    }
+
+    div.stFormSubmitButton > button:hover {
+        background: #064f56;
+        border-color: #064f56;
+        color: white;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    [role="combobox"]:focus-visible,
+    a:focus-visible {
+        outline: 3px solid #f0b429 !important;
+        outline-offset: 3px !important;
     }
 
     .footer {
-        color: #8390a5;
-        font-size: 12px;
+        color: #43536b;
+        font-size: 0.85rem;
         text-align: center;
-        padding: 24px 0 10px;
+        padding: 24px 0 8px;
+        line-height: 1.6;
     }
 
+    @media (max-width: 640px) {
+        div[data-testid="stForm"] {
+            padding: 14px;
+        }
+
+        .hero {
+            padding: 20px;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 CATEGORICAL_COLS = [
     "Department",
@@ -182,25 +194,33 @@ CATEGORICAL_COLS = [
 ]
 
 NUMERIC_GROUPS = {
-    "Personal & Employment": [
+    "Personal and employment details": [
         "Age",
         "Years_At_Company",
         "Monthly_Salary",
         "Team_Size",
     ],
-    "Workload & Productivity": [
+    "Workload and productivity": [
         "Work_Hours_Per_Week",
         "Projects_Handled",
         "Overtime_Hours",
         "Sick_Days",
     ],
-    "Growth & Engagement": [
+    "Growth and engagement": [
         "Remote_Work_Frequency",
         "Training_Hours",
         "Promotions",
         "Employee_Satisfaction_Score",
     ],
 }
+
+NUMERIC_COLS = [
+    col
+    for group in NUMERIC_GROUPS.values()
+    for col in group
+]
+
+REQUIRED_DATA_COLS = CATEGORICAL_COLS + NUMERIC_COLS
 
 
 @st.cache_resource
@@ -215,263 +235,392 @@ def load_data():
     return pd.read_csv(DATA_PATH)
 
 
-try:
-    model, preprocessor = load_artifacts()
-    df = load_data()
-except Exception:
+def show_loading_error(exc):
     st.error(
         "The application could not load its required files. "
         "Check the model, preprocessor, dataset, and package versions."
     )
+
     with st.expander("Technical details"):
-        st.exception(__import__("sys").exc_info()[1])
+        st.code(f"{type(exc).__name__}: {exc}")
+
     st.stop()
 
 
-# Sidebar
-with st.sidebar:
-    st.markdown(
-        '<div class="brand">PEOPLE ANALYTICS</div>',
-        unsafe_allow_html=True,
+# Load required files.
+try:
+    for file_path in (
+        MODEL_PATH,
+        PREPROCESSOR_PATH,
+        DATA_PATH,
+    ):
+        if not file_path.is_file():
+            raise FileNotFoundError(
+                f"Required file not found: {file_path.name}"
+            )
+
+    model, preprocessor = load_artifacts()
+    df = load_data()
+
+except Exception as exc:
+    show_loading_error(exc)
+
+
+# Validate dataset columns.
+missing_data_cols = [
+    col for col in REQUIRED_DATA_COLS
+    if col not in df.columns
+]
+
+if missing_data_cols:
+    st.error(
+        "The dataset is missing required columns: "
+        + ", ".join(missing_data_cols)
     )
-    st.markdown("## Performance Studio")
-    st.caption("Employee performance classification")
+    st.stop()
+
+
+# Preserve the feature order used during model training.
+if hasattr(preprocessor, "feature_names_in_"):
+    FEATURE_NAMES = list(preprocessor.feature_names_in_)
+else:
+    FEATURE_NAMES = REQUIRED_DATA_COLS.copy()
+
+unsupported_features = [
+    col for col in FEATURE_NAMES
+    if col not in REQUIRED_DATA_COLS
+]
+
+if unsupported_features:
+    st.error(
+        "The model expects features that are not supported by this form: "
+        + ", ".join(unsupported_features)
+    )
+    st.stop()
+
+
+# Sidebar navigation and instructions.
+with st.sidebar:
+    st.markdown("## People Analytics")
+    st.write("Employee Performance Predictor")
     st.divider()
 
-    st.markdown("### About this tool")
-    st.write(
-        "Explore employee information and generate a predicted "
-        "performance score using a trained machine learning model."
+    st.markdown("### How to use")
+    st.markdown(
+        "1. Complete the employee profile.\n"
+        "2. Review the entered values.\n"
+        "3. Select **Generate prediction**.\n"
+        "4. Review the prediction and probabilities."
     )
 
     st.divider()
     st.markdown("### Model information")
     st.write("**Algorithm:** Logistic Regression")
     st.write("**Task:** Classification")
-    st.write("**Output:** Performance score")
+    st.write(f"**Dataset records:** {len(df):,}")
 
     st.divider()
     st.caption("MCA 5141 · Machine Learning Lab")
 
 
-# Main header
+# Main dashboard header.
 st.markdown(
     """
     <div class="hero">
-        <div class="brand">WORKFORCE INTELLIGENCE</div>
+        <div class="hero-eyebrow">
+            Workforce intelligence · ML demonstration
+        </div>
         <h1>Employee Performance Predictor</h1>
         <p>
-            A machine learning interface for exploring employee
-            attributes and estimating performance scores.
+            Enter employee details to explore the output of a trained
+            classification model. Inputs are grouped to make the form
+            easier to complete and review.
         </p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# Overview metrics
+
+# Overview cards.
 metric_cols = st.columns(3)
 
 metrics = [
-    ("DATASET RECORDS", f"{len(df):,}"),
-    ("INPUT FEATURES", str(len(CATEGORICAL_COLS) + sum(
-        len(cols) for cols in NUMERIC_GROUPS.values()
-    ))),
-    ("PREDICTION MODEL", "Logistic Regression"),
+    ("Dataset records", f"{len(df):,}"),
+    ("Input features", str(len(FEATURE_NAMES))),
+    ("Prediction model", "Logistic Regression"),
 ]
 
 for container, (label, value) in zip(metric_cols, metrics):
     with container:
         st.markdown(
             f"""
-            <div class="panel">
-                <div class="metric-label">{label}</div>
-                <div class="metric-value">{value}</div>
+            <div class="metric-card">
+                <div class="metric-label">
+                    {html.escape(label)}
+                </div>
+                <div class="metric-value">
+                    {html.escape(value)}
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
+
 st.markdown(
-    '<div class="section-title">Employee profile</div>',
-    unsafe_allow_html=True,
-)
-st.markdown(
-    '<div class="section-subtitle">'
-    'Complete the details below, then generate a prediction.'
-    '</div>',
+    '<div class="section-heading">Employee profile</div>',
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    '<p class="muted">Complete the fields below. '
+    'Default numeric values use the dataset median. '
+    'Change them to match the scenario you want to test.</p>',
+    unsafe_allow_html=True,
+)
+
+
+# Build the employee input form.
 values = {}
 
 with st.form("employee_form"):
-    st.markdown("#### 01 · Employee information")
-    col1, col2 = st.columns(2)
+    st.markdown("#### 1. Role and background")
+    category_columns = st.columns(2)
 
     for index, col in enumerate(CATEGORICAL_COLS):
-        options = sorted(df[col].dropna().unique().tolist())
+        options = sorted(
+            df[col].dropna().astype(str).unique().tolist()
+        )
 
         if not options:
             st.error(f"No valid options are available for {col}.")
             st.stop()
 
-        with (col1 if index % 2 == 0 else col2):
+        label = col.replace("_", " ")
+
+        with category_columns[index % 2]:
             values[col] = st.selectbox(
-                col.replace("_", " "),
-                options=options,
-                key=f"cat_{col}",
+                label,
+                options,
+                help=f"Choose the employee's {label.lower()}.",
+                key=f"input_{col}",
             )
 
-    for group_name, columns in NUMERIC_GROUPS.items():
+    for group_index, (group_name, columns) in enumerate(
+        NUMERIC_GROUPS.items(),
+        start=2,
+    ):
         st.divider()
-        st.markdown(f"#### {group_name}")
-        input_cols = st.columns(2)
+        st.markdown(f"#### {group_index}. {group_name}")
+
+        input_columns = st.columns(2)
 
         for index, col in enumerate(columns):
-            if col not in df.columns:
-                st.error(f"Missing dataset column: {col}")
+            series = pd.to_numeric(
+                df[col],
+                errors="coerce",
+            ).dropna()
+
+            if series.empty:
+                st.error(
+                    f"The dataset has no numeric values for {col}."
+                )
                 st.stop()
 
-            default_value = float(df[col].median())
+            median = float(series.median())
+            observed_max = float(series.max())
+            label = col.replace("_", " ")
 
-            if pd.isna(default_value):
-                default_value = 0.0
+            if col == "Employee_Satisfaction_Score":
+                min_value = 0.0
+                max_value = 5.0
+                default = min(max(median, 0.0), 5.0)
+                step = 0.1
+                is_float = True
+                help_text = "Enter a score from 0 to 5."
 
-            with input_cols[index % 2]:
-                if col == "Monthly_Salary":
+            elif col == "Remote_Work_Frequency":
+                min_value = 0
+                max_value = 100
+                default = int(
+                    round(min(max(median, 0), 100))
+                )
+                step = 1
+                is_float = False
+                help_text = "Percentage of work done remotely (0–100)."
+
+            elif col == "Age":
+                min_value = 18
+                max_value = max(100, int(observed_max))
+                default = int(
+                    round(min(max(median, min_value), max_value))
+                )
+                step = 1
+                is_float = False
+                help_text = "Enter age in years."
+
+            elif col == "Monthly_Salary":
+                min_value = 0.0
+                max_value = max(observed_max * 2, median, 100.0)
+                default = min(max(median, 0.0), max_value)
+                step = 100.0
+                is_float = True
+                help_text = (
+                    "Enter monthly salary in the dataset's currency."
+                )
+
+            else:
+                min_value = 0
+                max_value = max(
+                    int(observed_max * 2),
+                    int(round(median)),
+                    1,
+                )
+                default = int(
+                    round(min(max(median, 0), max_value))
+                )
+                step = 1
+                is_float = False
+                help_text = f"Enter {label.lower()}."
+
+            with input_columns[index % 2]:
+                if is_float:
                     values[col] = st.number_input(
-                        "Monthly salary",
-                        min_value=0.0,
-                        value=max(0.0, default_value),
-                        step=100.0,
-                    )
-                elif col == "Employee_Satisfaction_Score":
-                    values[col] = st.number_input(
-                        "Employee satisfaction score",
-                        min_value=0.0,
-                        max_value=5.0,
-                        value=min(5.0, max(0.0, default_value)),
-                        step=0.1,
-                    )
-                elif col in [
-                    "Age",
-                    "Years_At_Company",
-                    "Team_Size",
-                    "Work_Hours_Per_Week",
-                    "Projects_Handled",
-                    "Overtime_Hours",
-                    "Sick_Days",
-                    "Remote_Work_Frequency",
-                    "Training_Hours",
-                    "Promotions",
-                ]:
-                    values[col] = st.number_input(
-                        col.replace("_", " "),
-                        min_value=0,
-                        value=max(0, int(default_value)),
-                        step=1,
+                        label,
+                        min_value=float(min_value),
+                        max_value=float(max_value),
+                        value=float(default),
+                        step=float(step),
+                        help=help_text,
+                        key=f"input_{col}",
                     )
                 else:
                     values[col] = st.number_input(
-                        col.replace("_", " "),
-                        value=default_value,
+                        label,
+                        min_value=int(min_value),
+                        max_value=int(max_value),
+                        value=int(default),
+                        step=int(step),
+                        help=help_text,
+                        key=f"input_{col}",
                     )
 
     st.divider()
+
     submitted = st.form_submit_button(
-        "Generate performance prediction",
+        "Generate prediction",
+        type="primary",
         use_container_width=True,
     )
 
 
+# Generate and display prediction.
 if submitted:
     try:
-        feature_names = list(preprocessor.feature_names_in_)
-        missing = [col for col in feature_names if col not in values]
-
-        if missing:
-            st.error(
-                "The form is missing required model features: "
-                + ", ".join(missing)
-            )
-            st.stop()
-
         input_df = pd.DataFrame(
-            [{col: values[col] for col in feature_names}]
+            [{col: values[col] for col in FEATURE_NAMES}]
         )
+
+        for col in CATEGORICAL_COLS:
+            if col in input_df.columns:
+                input_df[col] = input_df[col].astype(str)
+
+        for col in NUMERIC_COLS:
+            if col in input_df.columns:
+                input_df[col] = pd.to_numeric(
+                    input_df[col],
+                    errors="raise",
+                )
 
         transformed_input = preprocessor.transform(input_df)
         prediction = model.predict(transformed_input)[0]
 
         st.markdown(
-            '<div class="section-title">Prediction results</div>',
+            '<div class="section-heading">Prediction result</div>',
             unsafe_allow_html=True,
         )
 
-        result_col, detail_col = st.columns([1, 1.4])
+        result_col, detail_col = st.columns([1, 1.3], gap="large")
 
         with result_col:
             st.markdown(
                 f"""
                 <div class="result-card">
                     <div class="result-label">
-                        PREDICTED PERFORMANCE SCORE
+                        Predicted performance class
                     </div>
-                    <div class="result-score">{prediction}</div>
-                    <div class="result-label">
-                        Model classification output
+                    <div class="result-score">
+                        {html.escape(str(prediction))}
                     </div>
+                    <p class="muted">
+                        Output from the trained classification model.
+                    </p>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
         with detail_col:
-            st.markdown(
-                '<div class="panel">'
-                '<div class="metric-label">Prediction summary</div>',
-                unsafe_allow_html=True,
+            st.markdown("#### Understanding the result")
+            st.write(
+                "The model assigned the entered profile to the class "
+                "shown. This is an estimate based on patterns in the "
+                "training data, not a confirmed measure of actual "
+                "employee performance."
             )
-            st.write(f"**Predicted class:** {prediction}")
-            st.write(f"**Model:** Logistic Regression")
+            st.write("**Model:** Logistic Regression")
             st.write("**Status:** Prediction generated successfully")
-            st.markdown("</div>", unsafe_allow_html=True)
 
         if hasattr(model, "predict_proba"):
             probabilities = model.predict_proba(transformed_input)[0]
 
             probability_df = pd.DataFrame(
                 {
-                    "Performance score": [
+                    "Performance class": [
                         str(value) for value in model.classes_
                     ],
-                    "Probability (%)": probabilities * 100,
+                    "Estimated probability (%)": probabilities * 100,
                 }
-            ).sort_values("Probability (%)", ascending=False)
+            ).sort_values(
+                "Estimated probability (%)",
+                ascending=False,
+            )
 
-            st.markdown("#### Model confidence by class")
+            st.markdown("#### Estimated probability by class")
             st.caption(
-                "Probabilities show the model's estimated likelihood "
-                "for each class, not a guarantee of actual performance."
+                "These percentages are model estimates, not guarantees. "
+                "Use the table as an accessible alternative to the chart."
             )
 
             st.bar_chart(
-                probability_df.set_index("Performance score"),
-                horizontal=True,
-                x="Probability (%)",
+                probability_df.set_index("Performance class")[
+                    ["Estimated probability (%)"]
+                ]
             )
 
-        st.info(
-            "Educational demonstration only. This prediction should "
-            "not be used alone for employee evaluation, promotion, "
-            "compensation, or employment decisions."
+            st.dataframe(
+                probability_df.reset_index(drop=True),
+                hide_index=True,
+                use_container_width=True,
+            )
+
+        st.warning(
+            "Educational use only. Do not use this prediction alone for "
+            "hiring, promotion, compensation, disciplinary, or other "
+            "employment decisions. Model outputs may reflect bias in "
+            "the training data."
         )
 
     except Exception as exc:
-        st.error("Prediction could not be generated.")
+        st.error(
+            "The prediction could not be generated. Check that the saved "
+            "model and preprocessor are compatible and that the input "
+            "features match those used during training."
+        )
+
         with st.expander("Technical details"):
-            st.exception(exc)
+            st.code(f"{type(exc).__name__}: {exc}")
 
 
 st.markdown(
@@ -479,7 +628,7 @@ st.markdown(
     <div class="footer">
         MCA 5141 · Machine Learning Lab · Employee Performance Project
         <br>
-        For educational and demonstration purposes only
+        Educational demonstration only
     </div>
     """,
     unsafe_allow_html=True,
